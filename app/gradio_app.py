@@ -15,8 +15,6 @@ from src.nlp.ambiguity import format_ambiguity_as_text
 from src.nlp.deontic import format_deontic_as_text
 from src.summary.executive import generate_executive_summary
 
-
-
 from src.llm.ollama_client import analyze_clause_with_llm
 from src.risk.scoring import normalize_risk
 from src.risk.aggregator import ClauseAnalysis, aggregate_contract
@@ -29,6 +27,9 @@ from src.export.pdf_report import generate_pdf_report
 # ✅ IMPORTANT: matcher & generator are in data/
 from data.templates.matcher import match_clause_to_templates
 from data.templates.generator import generate_contract
+
+# ✅ NEW: knowledge base
+from src.kb.knowledge_base import append_contract_insight, get_kb_dashboard
 
 
 def process_upload(file_path):
@@ -124,7 +125,7 @@ def process_upload(file_path):
             "hits": len(amb.get("hits", []) or []),
         }
 
-        # ✅ NEW: deontic counts for audit
+        # ✅ deontic counts for audit
         deontic_counts = (getattr(prep, "deontic", {}) or {}).get("counts", {})
 
         append_audit_event(
@@ -144,7 +145,6 @@ def process_upload(file_path):
                 "contract_type_evidence": prep.contract_type_evidence,
                 "entity_counts": ent_counts,
                 "ambiguity": amb_metrics,
-                # ✅ NEW
                 "deontic_counts": deontic_counts,
             }
         )
@@ -226,7 +226,6 @@ def analyze_full_contract(clauses_list, entities_dict, contract_type_line, ambig
             {},
         )
 
-
     full_text = "\n".join([c.get("text", "") for c in clauses_list])
     compliance_flags = run_compliance_checks(full_text)
     compliance_text = format_compliance_flags(compliance_flags)
@@ -259,19 +258,6 @@ def analyze_full_contract(clauses_list, entities_dict, contract_type_line, ambig
 
     summary = aggregate_contract(clause_results)
 
-    append_audit_event(
-        {
-            "event": "llm_contract_analysis_smart_select",
-            "selection_stats": sel_stats,
-            "selected_clause_debug": selection_debug[:20],
-            "overall_risk": summary["overall_risk"],
-            "avg_score": summary["avg_score"],
-            "counts": summary["counts"],
-            "red_flags_count": len(summary["red_flags"]),
-            "compliance_flags_count": len(compliance_flags),
-        }
-    )
-
     counts = summary["counts"]
     counts_line = (
         f"High: {counts.get('High', 0)} | "
@@ -288,7 +274,6 @@ def analyze_full_contract(clauses_list, entities_dict, contract_type_line, ambig
     red_flags_text = "\n".join(
         [f"- [{x['severity']}] {x['flag_type']}: {x['reason']}" for x in summary["red_flags"]]
     ) or "No rule-based red flags detected."
-    
 
     executive_summary_text = generate_executive_summary(
         contract_type_line=contract_type_line,
@@ -299,6 +284,32 @@ def analyze_full_contract(clauses_list, entities_dict, contract_type_line, ambig
         top_high_risk_text=high_risk_text,
         red_flags_text=red_flags_text,
         compliance_text=compliance_text,
+    )
+
+    # ✅ NEW: store derived insights in knowledge base (NO raw contract text)
+    kb_record = append_contract_insight(
+        contract_type_line=contract_type_line,
+        overall_risk=summary["overall_risk"],
+        avg_score=str(summary["avg_score"]),
+        ambiguity_text=ambiguity_text or "",
+        red_flags_text=red_flags_text,
+        compliance_text=compliance_text,
+        top_high_risk_text=high_risk_text,
+    )
+
+    append_audit_event(
+        {
+            "event": "llm_contract_analysis_smart_select",
+            "selection_stats": sel_stats,
+            "selected_clause_debug": selection_debug[:20],
+            "overall_risk": summary["overall_risk"],
+            "avg_score": summary["avg_score"],
+            "counts": summary["counts"],
+            "red_flags_count": len(summary["red_flags"]),
+            "compliance_flags_count": len(compliance_flags),
+            "kb_record_written": True,
+            "kb_ts": kb_record.get("ts"),
+        }
     )
 
     return (
@@ -390,8 +401,16 @@ def generate_sme_contract(contract_type):
         return f"❌ Error: {e}"
 
 
-with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
-    gr.Markdown("# Contract Risk Bot — Phase 14 (SME-Friendly Standard Templates + Full Stack)")
+# ✅ NEW: KB refresh handler
+def refresh_knowledge_base(n: int = 200):
+    try:
+        return get_kb_dashboard(n=n)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+with gr.Blocks(title="Contract Risk Bot — Phase 17") as demo:
+    gr.Markdown("# Contract Risk Bot — Phase 17 (Knowledge Base + Full Stack)")
 
     clause_map_state = gr.State({})
     clauses_state = gr.State([])
@@ -407,8 +426,6 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
 
     entities_view = gr.JSON(label="Extracted Entities (NER + Regex)")
     ambiguity_view = gr.Textbox(label="Ambiguity Detection (rule-based)", lines=10)
-
-    # ✅ show obligations/rights/prohibitions
     deontic_view = gr.Textbox(label="Obligations / Rights / Prohibitions (extracted)", lines=12)
 
     original_preview = gr.Textbox(label="Original Text Preview (first 8000 chars)", lines=4)
@@ -442,14 +459,12 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     red_flags = gr.Textbox(label="Detected Red Flags (rule-based)", lines=7)
     compliance_box = gr.Textbox(label="Compliance Heuristic Flags (India-focused)", lines=10)
 
-    # ✅ NEW: Executive summary output
     executive_summary_box = gr.Textbox(label="Executive Summary (SME-Friendly)", lines=14)
 
     export_btn = gr.Button("Export PDF Report")
     pdf_file = gr.File(label="Download Report (PDF)", interactive=False)
 
     gr.Markdown("## Generate SME-Friendly Standard Contract Template")
-
     template_contract_type = gr.Dropdown(
         label="Select Contract Type",
         choices=["service_contract", "vendor_contract", "employment_agreement", "lease_agreement", "partnership_deed"],
@@ -457,6 +472,13 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     )
     generate_template_btn = gr.Button("Generate SME-Friendly Contract")
     generated_contract = gr.Textbox(label="Generated SME Contract (Editable)", lines=18)
+
+    # ✅ NEW: Knowledge Base UI
+    gr.Markdown("## Knowledge Base (Common SME Contract Issues)")
+    with gr.Row():
+        kb_last_n = gr.Number(label="Analyze last N records", value=200, precision=0)
+        kb_refresh_btn = gr.Button("Refresh Knowledge Base")
+    kb_dashboard = gr.JSON(label="Knowledge Base Dashboard")
 
     # --- Wiring ---
     process_btn.click(
@@ -502,7 +524,6 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
         outputs=[template_matches],
     )
 
-    # ✅ UPDATED: executive summary is now generated and shown
     full_analyze_btn.click(
         analyze_full_contract,
         inputs=[clauses_state, entities_view, contract_type_box, ambiguity_view],
@@ -530,5 +551,10 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
         outputs=[generated_contract],
     )
 
-demo.launch(server_name="127.0.0.1", server_port=7860)
+    kb_refresh_btn.click(
+        refresh_knowledge_base,
+        inputs=[kb_last_n],
+        outputs=[kb_dashboard],
+    )
 
+demo.launch(server_name="127.0.0.1", server_port=7860)
