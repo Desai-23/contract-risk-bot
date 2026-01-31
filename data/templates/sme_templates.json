@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "templates": [
+    {
+      "id": "term_001",
+      "contract_types": ["service_contract", "vendor_contract", "unknown"],
+      "category": "term",
+      "name": "Fixed Term with Optional Renewal",
+      "text": "This Agreement starts on [Start Date] and continues for [Term Duration]. Renewal (if any) shall occur only with written mutual agreement of both parties at least [X] days before expiry."
+    },
+    {
+      "id": "termination_001",
+      "contract_types": ["service_contract", "vendor_contract", "employment_agreement", "unknown"],
+      "category": "termination",
+      "name": "Mutual Termination with Notice + Cure",
+      "text": "Either party may terminate this Agreement by giving [30] days’ written notice. For material breach, the non-breaching party shall provide written notice and a cure period of [15] days before termination. Amounts for services completed up to the termination date shall remain payable."
+    },
+    {
+      "id": "payment_001",
+      "contract_types": ["service_contract", "vendor_contract", "unknown"],
+      "category": "payment",
+      "name": "Standard Payment Terms with Late Fee Cap",
+      "text": "Client shall pay invoices within [15] days of receipt. Late payments may attract interest at [X]% per month, subject to a maximum of [Y]% of the invoice value. Any disputed amounts shall be notified within [7] days with reasons."
+    },
+    {
+      "id": "indemnity_001",
+      "contract_types": ["service_contract", "vendor_contract", "unknown"],
+      "category": "indemnity",
+      "name": "Balanced Indemnity with Cap",
+      "text": "Each party shall indemnify the other against third-party claims arising from its breach, gross negligence, or wilful misconduct, subject to a liability cap of [Cap Amount]. Indemnity excludes indirect or consequential damages. The indemnified party must provide prompt notice and allow control of defense."
+    },
+    {
+      "id": "liability_001",
+      "contract_types": ["service_contract", "vendor_contract", "unknown"],
+      "category": "liability",
+      "name": "Liability Cap + Exclusion of Indirect Damages",
+      "text": "Total liability of either party under this Agreement shall not exceed fees paid in the [last 6 months]. Neither party shall be liable for indirect, incidental, or consequential damages, except for fraud or wilful misconduct."
+    },
+    {
+      "id": "jurisdiction_001",
+      "contract_types": ["service_contract", "vendor_contract", "lease_agreement", "unknown"],
+      "category": "jurisdiction",
+      "name": "India Governing Law + Local Courts",
+      "text": "This Agreement shall be governed by the laws of India. The courts at [City, India] shall have exclusive jurisdiction. Parties may attempt good-faith negotiation for [15] days before litigation."
+    },
+    {
+      "id": "confidentiality_001",
+      "contract_types": ["service_contract", "vendor_contract", "employment_agreement", "unknown"],
+      "category": "confidentiality",
+      "name": "Confidentiality with Duration + Permitted Disclosures",
+      "text": "Each party shall keep confidential information confidential during the term and for [2] years thereafter. Disclosure is permitted to employees/contractors on a need-to-know basis and as required by law with prior notice where feasible."
+    },
+    {
+      "id": "ip_001",
+      "contract_types": ["service_contract", "vendor_contract", "unknown"],
+      "category": "ip",
+      "name": "Background IP + Deliverables IP Split",
+      "text": "Each party retains ownership of its pre-existing background IP. Deliverables created specifically for Client shall be owned by Client upon full payment, while Vendor retains rights to generic tools, frameworks, and know-how not uniquely created for Client."
+    },
+    {
+      "id": "non_compete_001",
+      "contract_types": ["employment_agreement", "unknown"],
+      "category": "non_compete",
+      "name": "Prefer NDA + Non-Solicit over Non-Compete",
+      "text": "Employee shall not disclose confidential information during employment and for [X] years thereafter. Employee shall not solicit Client’s customers or employees for [Y] months after exit. No broad non-compete restriction applies beyond confidentiality and non-solicitation."
+    }
+  ]
+}
+
+
