@@ -12,6 +12,8 @@ from src.ingestion.loader import load_text_from_upload
 from src.nlp.preprocess import preprocess_contract
 
 from src.nlp.ambiguity import format_ambiguity_as_text
+from src.nlp.deontic import format_deontic_as_text
+
 
 from src.llm.ollama_client import analyze_clause_with_llm
 from src.risk.scoring import normalize_risk
@@ -34,6 +36,7 @@ def process_upload(file_path):
       contract_type_line,
       entities_dict,
       ambiguity_text,
+      deontic_text,
       original_preview,
       normalized_preview,
       detected_language,
@@ -47,6 +50,7 @@ def process_upload(file_path):
             "No file uploaded.",
             "",
             {},
+            "",
             "",
             "",
             "",
@@ -87,6 +91,7 @@ def process_upload(file_path):
         )
 
         ambiguity_text = format_ambiguity_as_text(getattr(prep, "ambiguity", {}))
+        deontic_text = format_deontic_as_text(getattr(prep, "deontic", {}))
 
         original_preview = loaded.text[:8000]
         normalized_preview = prep.normalized_text[:8000]
@@ -117,6 +122,9 @@ def process_upload(file_path):
             "hits": len(amb.get("hits", []) or []),
         }
 
+        # ✅ NEW: deontic counts for audit
+        deontic_counts = (getattr(prep, "deontic", {}) or {}).get("counts", {})
+
         append_audit_event(
             {
                 "event": "upload_and_extract",
@@ -134,6 +142,8 @@ def process_upload(file_path):
                 "contract_type_evidence": prep.contract_type_evidence,
                 "entity_counts": ent_counts,
                 "ambiguity": amb_metrics,
+                # ✅ NEW
+                "deontic_counts": deontic_counts,
             }
         )
 
@@ -142,6 +152,7 @@ def process_upload(file_path):
             contract_type_line,
             prep.entities,
             ambiguity_text,
+            deontic_text,
             original_preview,
             normalized_preview,
             prep.language,
@@ -156,6 +167,7 @@ def process_upload(file_path):
             f"❌ Error: {e}",
             "",
             {},
+            "",
             "",
             "",
             "",
@@ -378,6 +390,9 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     entities_view = gr.JSON(label="Extracted Entities (NER + Regex)")
     ambiguity_view = gr.Textbox(label="Ambiguity Detection (rule-based)", lines=10)
 
+    # ✅ NEW UI: show obligations/rights/prohibitions
+    deontic_view = gr.Textbox(label="Obligations / Rights / Prohibitions (extracted)", lines=12)
+
     original_preview = gr.Textbox(label="Original Text Preview (first 8000 chars)", lines=4)
     normalized_preview = gr.Textbox(label="Normalized English Text Preview (first 8000 chars)", lines=4)
 
@@ -405,12 +420,6 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     avg_score = gr.Textbox(label="Average Risk Score", interactive=False)
     risk_counts = gr.Textbox(label="Clause Risk Distribution (LLM subset)", interactive=False)
 
-
-
-
-
-
-
     top_high_risk = gr.Textbox(label="Top High-Risk Clauses (subset)", lines=7)
     red_flags = gr.Textbox(label="Detected Red Flags (rule-based)", lines=7)
     compliance_box = gr.Textbox(label="Compliance Heuristic Flags (India-focused)", lines=10)
@@ -437,6 +446,7 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
             contract_type_box,
             entities_view,
             ambiguity_view,
+            deontic_view,          # ✅ NEW output
             original_preview,
             normalized_preview,
             lang,
@@ -490,4 +500,3 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     )
 
 demo.launch(server_name="127.0.0.1", server_port=7860)
-

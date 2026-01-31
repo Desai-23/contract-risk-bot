@@ -1,47 +1,67 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Any
+from typing import Dict, Any, List
+
+# Prohibition first (most specific)
+PROHIBITION_PAT = re.compile(
+    r"\b(shall not|must not|may not|is prohibited from|are prohibited from|will not)\b",
+    re.I,
+)
+
+# Obligation patterns
+OBLIGATION_PAT = re.compile(
+    r"\b(shall|must|is required to|are required to|undertakes to|agrees to)\b",
+    re.I,
+)
+
+# Rights / permissions patterns
+RIGHT_PAT = re.compile(
+    r"\b(may|can|is entitled to|are entitled to|has the right to|have the right to)\b",
+    re.I,
+)
+
+# Split into candidates (simple + robust)
+SENT_SPLIT = re.compile(r"(?<=[\.\n;:])\s+")
 
 
-# Basic modal patterns
-OBLIGATION_PAT = re.compile(r"\b(shall|must|is required to|are required to|will)\b", re.I)
-RIGHT_PAT = re.compile(r"\b(may|is entitled to|are entitled to|can)\b", re.I)
-PROHIBITION_PAT = re.compile(r"\b(shall not|must not|may not|is prohibited from|are prohibited from)\b", re.I)
+def _clean(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
 
 
-def _clean_line(line: str) -> str:
-    line = (line or "").strip()
-    line = re.sub(r"\s+", " ", line)
-    return line
+def _dedupe(items: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for x in items:
+        k = x.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
 
 
-def extract_deontic_statements(text: str, max_items_each: int = 12) -> Dict[str, Any]:
+def extract_deontic_statements(text: str, max_each: int = 12) -> Dict[str, Any]:
     """
-    Extracts obligation/right/prohibition sentences using rule-based matching.
+    Extract obligations / rights / prohibitions from normalized English text.
+    Rule-based: keyword/modal detection.
 
-    Output:
-    {
-      "obligations": [...],
-      "rights": [...],
-      "prohibitions": [...],
-      "counts": {"obligations": n, "rights": n, "prohibitions": n}
-    }
+    Returns JSON-safe dict with lists + counts.
     """
     t = text or ""
-    # Split roughly into sentences/lines
-    candidates = re.split(r"(?<=[.;:\n])\s+", t)
+    candidates = SENT_SPLIT.split(t)
 
     obligations: List[str] = []
     rights: List[str] = []
     prohibitions: List[str] = []
 
-    for c in candidates:
-        s = _clean_line(c)
-        if not s or len(s) < 12:
+    for cand in candidates:
+        s = _clean(cand)
+        if not s or len(s) < 15:
             continue
 
-        # Prohibition first (more specific)
+        # categorize with precedence
         if PROHIBITION_PAT.search(s):
             prohibitions.append(s)
         elif OBLIGATION_PAT.search(s):
@@ -49,23 +69,12 @@ def extract_deontic_statements(text: str, max_items_each: int = 12) -> Dict[str,
         elif RIGHT_PAT.search(s):
             rights.append(s)
 
-        if len(obligations) >= max_items_each and len(rights) >= max_items_each and len(prohibitions) >= max_items_each:
+        if len(obligations) >= max_each and len(rights) >= max_each and len(prohibitions) >= max_each:
             break
 
-    # Dedupe preserving order
-    def dedupe(items: List[str]) -> List[str]:
-        seen = set()
-        out = []
-        for x in items:
-            k = x.lower()
-            if k not in seen:
-                seen.add(k)
-                out.append(x)
-        return out
-
-    obligations = dedupe(obligations)[:max_items_each]
-    rights = dedupe(rights)[:max_items_each]
-    prohibitions = dedupe(prohibitions)[:max_items_each]
+    obligations = _dedupe(obligations)[:max_each]
+    rights = _dedupe(rights)[:max_each]
+    prohibitions = _dedupe(prohibitions)[:max_each]
 
     return {
         "obligations": obligations,
@@ -95,3 +104,7 @@ def format_deontic_as_text(deontic: Dict[str, Any]) -> str:
             section("PROHIBITIONS", deontic.get("prohibitions", [])),
         ]
     )
+
+
+
+
