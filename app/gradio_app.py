@@ -558,5 +558,3 @@ with gr.Blocks(title="Contract Risk Bot — Phase 17") as demo:
     )
 
 demo.launch(server_name="127.0.0.1", server_port=7860)
-
-
