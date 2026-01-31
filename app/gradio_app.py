@@ -13,6 +13,8 @@ from src.nlp.preprocess import preprocess_contract
 
 from src.nlp.ambiguity import format_ambiguity_as_text
 from src.nlp.deontic import format_deontic_as_text
+from src.summary.executive import generate_executive_summary
+
 
 
 from src.llm.ollama_client import analyze_clause_with_llm
@@ -210,7 +212,8 @@ def analyze_selected_clause(selected_label, clause_map):
     )
 
 
-def analyze_full_contract(clauses_list):
+def analyze_full_contract(clauses_list, entities_dict, contract_type_line, ambiguity_text):
+
     if not clauses_list:
         return (
             "Unclear",
@@ -219,8 +222,10 @@ def analyze_full_contract(clauses_list):
             "No clauses found.",
             "[]",
             "No compliance-related heuristic flags detected.",
+            "No executive summary available.",
             {},
         )
+
 
     full_text = "\n".join([c.get("text", "") for c in clauses_list])
     compliance_flags = run_compliance_checks(full_text)
@@ -283,6 +288,18 @@ def analyze_full_contract(clauses_list):
     red_flags_text = "\n".join(
         [f"- [{x['severity']}] {x['flag_type']}: {x['reason']}" for x in summary["red_flags"]]
     ) or "No rule-based red flags detected."
+    
+
+    executive_summary_text = generate_executive_summary(
+        contract_type_line=contract_type_line,
+        entities=entities_dict or {},
+        ambiguity_text=ambiguity_text or "",
+        overall_risk=summary["overall_risk"],
+        avg_score=str(summary["avg_score"]),
+        top_high_risk_text=high_risk_text,
+        red_flags_text=red_flags_text,
+        compliance_text=compliance_text,
+    )
 
     return (
         summary["overall_risk"],
@@ -291,6 +308,7 @@ def analyze_full_contract(clauses_list):
         high_risk_text,
         red_flags_text,
         compliance_text,
+        executive_summary_text,
         summary,
     )
 
@@ -390,7 +408,7 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     entities_view = gr.JSON(label="Extracted Entities (NER + Regex)")
     ambiguity_view = gr.Textbox(label="Ambiguity Detection (rule-based)", lines=10)
 
-    # ✅ NEW UI: show obligations/rights/prohibitions
+    # ✅ show obligations/rights/prohibitions
     deontic_view = gr.Textbox(label="Obligations / Rights / Prohibitions (extracted)", lines=12)
 
     original_preview = gr.Textbox(label="Original Text Preview (first 8000 chars)", lines=4)
@@ -424,6 +442,9 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     red_flags = gr.Textbox(label="Detected Red Flags (rule-based)", lines=7)
     compliance_box = gr.Textbox(label="Compliance Heuristic Flags (India-focused)", lines=10)
 
+    # ✅ NEW: Executive summary output
+    executive_summary_box = gr.Textbox(label="Executive Summary (SME-Friendly)", lines=14)
+
     export_btn = gr.Button("Export PDF Report")
     pdf_file = gr.File(label="Download Report (PDF)", interactive=False)
 
@@ -446,7 +467,7 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
             contract_type_box,
             entities_view,
             ambiguity_view,
-            deontic_view,          # ✅ NEW output
+            deontic_view,
             original_preview,
             normalized_preview,
             lang,
@@ -481,10 +502,20 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
         outputs=[template_matches],
     )
 
+    # ✅ UPDATED: executive summary is now generated and shown
     full_analyze_btn.click(
         analyze_full_contract,
-        inputs=[clauses_state],
-        outputs=[overall_risk, avg_score, risk_counts, top_high_risk, red_flags, compliance_box, contract_summary_state],
+        inputs=[clauses_state, entities_view, contract_type_box, ambiguity_view],
+        outputs=[
+            overall_risk,
+            avg_score,
+            risk_counts,
+            top_high_risk,
+            red_flags,
+            compliance_box,
+            executive_summary_box,
+            contract_summary_state,
+        ],
     )
 
     export_btn.click(
@@ -500,5 +531,4 @@ with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
     )
 
 demo.launch(server_name="127.0.0.1", server_port=7860)
-
 
