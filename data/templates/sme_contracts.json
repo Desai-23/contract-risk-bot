@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "jurisdiction": "India",
+  "contracts": [
+    {
+      "contract_type": "service_contract",
+      "name": "Standard SME Service Agreement (India)",
+      "description": "Balanced service agreement suitable for Indian SMEs",
+      "clauses": [
+        {
+          "title": "Parties",
+          "text": "This Service Agreement is entered into between [Client Name], having its principal place of business at [Client Address] (\"Client\"), and [Service Provider Name], having its principal place of business at [Provider Address] (\"Service Provider\")."
+        },
+        {
+          "title": "Scope of Services",
+          "text": "Service Provider shall provide the services described in Schedule A (\"Services\") in a professional and workmanlike manner."
+        },
+        {
+          "title": "Fees and Payment",
+          "text": "Client shall pay Service Provider the fees specified in Schedule B. Invoices shall be payable within [15] days of receipt. Late payments may attract interest not exceeding [1.5]% per month."
+        },
+        {
+          "title": "Term and Termination",
+          "text": "This Agreement shall commence on [Start Date] and continue for [Initial Term]. Either party may terminate this Agreement by providing [30] days’ written notice. Breach termination shall include a cure period of [15] days."
+        },
+        {
+          "title": "Confidentiality",
+          "text": "Each party shall maintain the confidentiality of the other party’s confidential information during the term of this Agreement and for [2] years thereafter."
+        },
+        {
+          "title": "Intellectual Property",
+          "text": "Each party retains ownership of its background intellectual property. Deliverables created specifically for Client shall belong to Client upon full payment."
+        },
+        {
+          "title": "Limitation of Liability",
+          "text": "The total liability of either party shall not exceed the fees paid in the [preceding 6 months]. Neither party shall be liable for indirect or consequential damages."
+        },
+        {
+          "title": "Governing Law and Jurisdiction",
+          "text": "This Agreement shall be governed by the laws of India. Courts located in [City], India shall have exclusive jurisdiction."
+        }
+      ]
+    },
+
+    {
+      "contract_type": "vendor_contract",
+      "name": "Standard SME Vendor Agreement (India)",
+      "description": "Balanced vendor/supply contract for SMEs",
+      "clauses": [
+        {
+          "title": "Parties",
+          "text": "This Vendor Agreement is entered into between [Buyer Name] and [Vendor Name]."
+        },
+        {
+          "title": "Supply of Goods",
+          "text": "Vendor shall supply the goods as specified in Schedule A in accordance with agreed specifications and timelines."
+        },
+        {
+          "title": "Pricing and Payment",
+          "text": "Prices shall be as agreed in writing. Payments shall be made within [15] days of invoice receipt."
+        },
+        {
+          "title": "Inspection and Acceptance",
+          "text": "Buyer shall have the right to inspect goods upon delivery. Rejected goods shall be replaced or refunded."
+        },
+        {
+          "title": "Termination",
+          "text": "Either party may terminate this Agreement with [30] days’ written notice. Immediate termination is permitted for material breach subject to cure."
+        },
+        {
+          "title": "Indemnity",
+          "text": "Each party shall indemnify the other against third-party claims arising from breach, negligence, or wilful misconduct, subject to a reasonable liability cap."
+        },
+        {
+          "title": "Governing Law",
+          "text": "This Agreement shall be governed by the laws of India and courts of [City] shall have jurisdiction."
+        }
+      ]
+    }
+  ]
+}
+

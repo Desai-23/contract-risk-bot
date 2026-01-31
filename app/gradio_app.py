@@ -11,18 +11,20 @@ from src.audit.logger import append_audit_event
 from src.ingestion.loader import load_text_from_upload
 from src.nlp.preprocess import preprocess_contract
 
+from src.nlp.ambiguity import format_ambiguity_as_text
+
 from src.llm.ollama_client import analyze_clause_with_llm
 from src.risk.scoring import normalize_risk
 from src.risk.aggregator import ClauseAnalysis, aggregate_contract
 from src.risk.selector import smart_select_clauses
 
-from src.export.pdf_report import generate_pdf_report
-from src.negotiation.rewrite import rewrite_clause
-
 from src.compliance.checks import run_compliance_checks, format_compliance_flags
+from src.negotiation.rewrite import rewrite_clause
+from src.export.pdf_report import generate_pdf_report
 
-# NEW: template matcher
-from src.templates.matcher import match_clause_to_templates
+# ✅ IMPORTANT: matcher & generator are in data/
+from data.templates.matcher import match_clause_to_templates
+from data.templates.generator import generate_contract
 
 
 def process_upload(file_path):
@@ -31,6 +33,7 @@ def process_upload(file_path):
       status,
       contract_type_line,
       entities_dict,
+      ambiguity_text,
       original_preview,
       normalized_preview,
       detected_language,
@@ -44,6 +47,7 @@ def process_upload(file_path):
             "No file uploaded.",
             "",
             {},
+            "",
             "",
             "",
             "",
@@ -82,6 +86,8 @@ def process_upload(file_path):
             f"| evidence={', '.join(prep.contract_type_evidence) if prep.contract_type_evidence else '[]'}"
         )
 
+        ambiguity_text = format_ambiguity_as_text(getattr(prep, "ambiguity", {}))
+
         original_preview = loaded.text[:8000]
         normalized_preview = prep.normalized_text[:8000]
 
@@ -104,6 +110,13 @@ def process_upload(file_path):
             "party_roles": len(prep.entities.get("parties", {}).get("roles", {})),
         }
 
+        amb = getattr(prep, "ambiguity", {}) or {}
+        amb_metrics = {
+            "level": amb.get("level", "None"),
+            "score": amb.get("score", 0),
+            "hits": len(amb.get("hits", []) or []),
+        }
+
         append_audit_event(
             {
                 "event": "upload_and_extract",
@@ -120,6 +133,7 @@ def process_upload(file_path):
                 "contract_type_method": prep.contract_type_method,
                 "contract_type_evidence": prep.contract_type_evidence,
                 "entity_counts": ent_counts,
+                "ambiguity": amb_metrics,
             }
         )
 
@@ -127,6 +141,7 @@ def process_upload(file_path):
             status,
             contract_type_line,
             prep.entities,
+            ambiguity_text,
             original_preview,
             normalized_preview,
             prep.language,
@@ -141,6 +156,7 @@ def process_upload(file_path):
             f"❌ Error: {e}",
             "",
             {},
+            "",
             "",
             "",
             "",
@@ -220,7 +236,6 @@ def analyze_full_contract(clauses_list):
                 risk_reason=result["risk_reason"],
             )
         )
-
         selection_debug.append(
             {"clause_id": c.clause_id, "selection_score": c.score, "selection_reasons": c.reasons}
         )
@@ -290,7 +305,6 @@ def export_pdf(contract_summary, high_risk_text, red_flags_text, compliance_text
     append_audit_event(
         {"event": "export_pdf_report", "output_path": out_path, "overall_risk": contract_summary.get("overall_risk", "Unclear")}
     )
-
     return out_path
 
 
@@ -313,31 +327,41 @@ def suggest_rewrite(selected_label, clause_map):
     return str(out.get("is_unfavorable", False)), out.get("why_unfavorable", ""), combined
 
 
-# NEW: Template matching handler
 def match_selected_clause_to_templates(selected_label, clause_map, contract_type_line):
     if not selected_label or not clause_map:
         return []
 
     clause_text = clause_map.get(selected_label, "")
-    # contract_type_line format: "<type> | conf=..."; take first token
     contract_type = (contract_type_line.split("|")[0].strip() if contract_type_line else "unknown")
 
     matches = match_clause_to_templates(clause_text, contract_type=contract_type, top_k=3)
 
     append_audit_event(
-        {
-            "event": "template_similarity_match",
-            "contract_type": contract_type,
-            "top_match_score": matches[0]["similarity_score"] if matches else None,
-            "matches_returned": len(matches),
-        }
+        {"event": "template_similarity_match", "contract_type": contract_type, "matches_returned": len(matches)}
     )
-
     return matches
 
 
-with gr.Blocks(title="Contract Risk Bot — Phase 13") as demo:
-    gr.Markdown("# Contract Risk Bot — Phase 13 (Clause Similarity to Templates)")
+def generate_sme_contract(contract_type):
+    if not contract_type:
+        return "Please select a contract type."
+
+    try:
+        out = generate_contract(contract_type)
+
+        append_audit_event(
+            {"event": "generate_sme_contract", "contract_type": contract_type, "template_name": out.get("name")}
+        )
+
+        header = f"{out.get('name','SME Contract Template')}\n\n{out.get('description','')}\n\n"
+        return header + out.get("text", "")
+
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+
+with gr.Blocks(title="Contract Risk Bot — Phase 14") as demo:
+    gr.Markdown("# Contract Risk Bot — Phase 14 (SME-Friendly Standard Templates + Full Stack)")
 
     clause_map_state = gr.State({})
     clauses_state = gr.State([])
@@ -352,40 +376,59 @@ with gr.Blocks(title="Contract Risk Bot — Phase 13") as demo:
     lang = gr.Textbox(label="Detected Language (Original)", interactive=False)
 
     entities_view = gr.JSON(label="Extracted Entities (NER + Regex)")
+    ambiguity_view = gr.Textbox(label="Ambiguity Detection (rule-based)", lines=10)
 
-    original_preview = gr.Textbox(label="Original Text Preview (first 8000 chars)", lines=5)
-    normalized_preview = gr.Textbox(label="Normalized English Text Preview (first 8000 chars)", lines=5)
+    original_preview = gr.Textbox(label="Original Text Preview (first 8000 chars)", lines=4)
+    normalized_preview = gr.Textbox(label="Normalized English Text Preview (first 8000 chars)", lines=4)
 
     clause_dropdown = gr.Dropdown(label="Clauses (normalized)", choices=[], value=None)
     clause_text = gr.Textbox(label="Selected Clause Text (normalized)", lines=6)
 
-    analyze_btn = gr.Button("Analyze Selected Clause")
+    with gr.Row():
+        analyze_btn = gr.Button("Analyze Selected Clause")
+        rewrite_btn = gr.Button("Suggest SME-Friendly Rewrite")
+        template_btn = gr.Button("Match Clause to Standard Templates")
+
     clause_type = gr.Textbox(label="Clause Type", interactive=False)
     explanation = gr.Textbox(label="Plain-English Explanation", lines=4)
     risk = gr.Textbox(label="Risk Assessment", interactive=False)
     mitigation = gr.Textbox(label="Suggested Mitigation", lines=3)
 
-    # NEW: template match UI
-    template_btn = gr.Button("Match Clause to Standard Templates")
+    is_unfavorable = gr.Textbox(label="Is Unfavorable?", interactive=False)
+    why_unfavorable = gr.Textbox(label="Why Unfavorable", lines=3)
+    rewrite_text = gr.Textbox(label="Suggested Rewrite + Negotiation Points", lines=8)
+
     template_matches = gr.JSON(label="Top Template Matches")
 
     full_analyze_btn = gr.Button("Analyze Full Contract (Smart Selection)")
     overall_risk = gr.Textbox(label="Overall Contract Risk", interactive=False)
     avg_score = gr.Textbox(label="Average Risk Score", interactive=False)
     risk_counts = gr.Textbox(label="Clause Risk Distribution (LLM subset)", interactive=False)
+
+
+
+
+
+
+
     top_high_risk = gr.Textbox(label="Top High-Risk Clauses (subset)", lines=7)
     red_flags = gr.Textbox(label="Detected Red Flags (rule-based)", lines=7)
-
     compliance_box = gr.Textbox(label="Compliance Heuristic Flags (India-focused)", lines=10)
 
     export_btn = gr.Button("Export PDF Report")
     pdf_file = gr.File(label="Download Report (PDF)", interactive=False)
 
-    rewrite_btn = gr.Button("Suggest SME-Friendly Rewrite")
-    is_unfavorable = gr.Textbox(label="Is Unfavorable?", interactive=False)
-    why_unfavorable = gr.Textbox(label="Why Unfavorable", lines=3)
-    rewrite_text = gr.Textbox(label="Suggested Rewrite + Negotiation Points", lines=9)
+    gr.Markdown("## Generate SME-Friendly Standard Contract Template")
 
+    template_contract_type = gr.Dropdown(
+        label="Select Contract Type",
+        choices=["service_contract", "vendor_contract", "employment_agreement", "lease_agreement", "partnership_deed"],
+        value="service_contract",
+    )
+    generate_template_btn = gr.Button("Generate SME-Friendly Contract")
+    generated_contract = gr.Textbox(label="Generated SME Contract (Editable)", lines=18)
+
+    # --- Wiring ---
     process_btn.click(
         process_upload,
         inputs=[file_in],
@@ -393,6 +436,7 @@ with gr.Blocks(title="Contract Risk Bot — Phase 13") as demo:
             status,
             contract_type_box,
             entities_view,
+            ambiguity_view,
             original_preview,
             normalized_preview,
             lang,
@@ -415,6 +459,12 @@ with gr.Blocks(title="Contract Risk Bot — Phase 13") as demo:
         outputs=[clause_type, explanation, risk, mitigation],
     )
 
+    rewrite_btn.click(
+        suggest_rewrite,
+        inputs=[clause_dropdown, clause_map_state],
+        outputs=[is_unfavorable, why_unfavorable, rewrite_text],
+    )
+
     template_btn.click(
         match_selected_clause_to_templates,
         inputs=[clause_dropdown, clause_map_state, contract_type_box],
@@ -433,10 +483,10 @@ with gr.Blocks(title="Contract Risk Bot — Phase 13") as demo:
         outputs=[pdf_file],
     )
 
-    rewrite_btn.click(
-        suggest_rewrite,
-        inputs=[clause_dropdown, clause_map_state],
-        outputs=[is_unfavorable, why_unfavorable, rewrite_text],
+    generate_template_btn.click(
+        generate_sme_contract,
+        inputs=[template_contract_type],
+        outputs=[generated_contract],
     )
 
 demo.launch(server_name="127.0.0.1", server_port=7860)
