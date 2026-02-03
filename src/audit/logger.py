@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from src.config import AUDIT_LOG_PATH
+from src.config import AUDIT_LOG_PATH 
 
 
 def append_audit_event(event: Dict[str, Any]) -> None:
